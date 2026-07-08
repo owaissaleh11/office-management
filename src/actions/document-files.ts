@@ -3,8 +3,11 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
-import fs from "fs/promises";
-import path from "path";
+import { createClient } from "@supabase/supabase-js";
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 export async function deleteDocumentFile(id: string) {
   try {
@@ -17,12 +20,18 @@ export async function deleteDocumentFile(id: string) {
     });
     if (!file) return { success: false, error: "الملف غير موجود" };
 
-    // Delete from disk
-    try {
-      const fullPath = path.join(process.cwd(), "public", file.filePath);
-      await fs.unlink(fullPath);
-    } catch {
-      // File may already be deleted from disk, continue
+    if (!supabaseUrl || !supabaseKey) {
+      return { success: false, error: "إعدادات التخزين السحابي مفقودة" };
+    }
+
+    // Delete from Supabase Storage
+    const storagePath = `${file.caseDocument.caseId}/${file.fileName}`;
+    const { error: deleteError } = await supabase.storage
+      .from("uploads")
+      .remove([storagePath]);
+
+    if (deleteError) {
+      console.error("Supabase file delete error:", deleteError);
     }
 
     await prisma.documentFile.delete({ where: { id } });

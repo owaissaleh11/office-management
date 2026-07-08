@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { writeFile, mkdir } from "fs/promises";
-import path from "path";
+import { createClient } from "@supabase/supabase-js";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+
+// Initialize Supabase admin client
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 const ALLOWED_TYPES = ["application/pdf", "image/jpeg", "image/jpg", "image/png", "image/webp"];
 const MAX_SIZE = 10 * 1024 * 1024; // 10MB
@@ -27,6 +31,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "حجم الملف يتجاوز الحد الأقصى (10MB)" }, { status: 400 });
     }
 
+    if (!supabaseUrl || !supabaseKey) {
+      return NextResponse.json({ error: "إعدادات التخزين السحابي مفقودة" }, { status: 500 });
+    }
+
     const caseDoc = await prisma.caseDocument.findUnique({
       where: { id: caseDocumentId },
       select: { caseId: true },
@@ -36,18 +44,27 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "المستند غير موجود" }, { status: 404 });
     }
 
-    // Build upload directory
-    const uploadDir = path.join(process.cwd(), "public", "uploads", caseDoc.caseId);
-    await mkdir(uploadDir, { recursive: true });
-
-    // Create unique filename
+    // Create unique filename and upload to Supabase
     const ext = file.name.split(".").pop() || "bin";
     const uniqueName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const filePath = `/uploads/${caseDoc.caseId}/${uniqueName}`;
-    const fullPath = path.join(process.cwd(), "public", filePath);
+    const storagePath = `${caseDoc.caseId}/${uniqueName}`;
 
-    const bytes = await file.arrayBuffer();
-    await writeFile(fullPath, Buffer.from(bytes));
+    const { error: uploadError } = await supabase.storage
+      .from("uploads")
+      .upload(storagePath, file, {
+        contentType: file.type,
+        upsert: false,
+      });
+
+    if (uploadError) {
+      console.error("Supabase upload error:", uploadError);
+      return NextResponse.json({ error: "حدث خطأ أثناء الرفع السحابي" }, { status: 500 });
+    }
+
+    // Get public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from("uploads")
+      .getPublicUrl(storagePath);
 
     // Save to DB
     const documentFile = await prisma.documentFile.create({
@@ -55,7 +72,7 @@ export async function POST(req: NextRequest) {
         caseDocumentId,
         fileName: uniqueName,
         originalName: file.name,
-        filePath,
+        filePath: publicUrl,
         fileSize: file.size,
         mimeType: file.type,
         uploadedBy: session?.user?.id ?? null,
