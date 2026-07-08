@@ -1,0 +1,215 @@
+// =============================================================================
+// Prisma Schema — Office Management System
+// =============================================================================
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================================
+// Enums
+// =============================================================================
+
+
+
+// =============================================================================
+// Models
+// =============================================================================
+
+model User {
+  id        String     @id @default(cuid())
+  name      String
+  email     String     @unique
+  password  String
+  image     String?
+  isActive  Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  
+  activities Activity[]
+
+  @@index([email])
+  @@map("users")
+}
+
+model Category {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  services    Service[]
+
+  @@index([isActive])
+  @@map("categories")
+}
+
+model Service {
+  id             String    @id @default(cuid())
+  name           String
+  description    String?
+  categoryId     String
+  processingTime String?   // e.g. "3-5 business days"
+  fees           Float     @default(0)
+  notes          String?
+  status         String    @default("ACTIVE") // "ACTIVE", "INACTIVE", "ARCHIVED"
+  attachments    String?   // JSON array string of URLs or paths
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  category       Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  documents      RequiredDocument[]
+  cases          Case[]
+
+  @@index([categoryId])
+  @@index([status])
+  @@map("services")
+}
+
+model Activity {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String   // e.g. "CREATED_SERVICE", "UPDATED_USER", "LOGIN"
+  target    String?  // e.g. "Service: Laptop Setup"
+  details   String?  // Optional JSON string or extra text
+  ipAddress String?  // User's IP address
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([action])
+  @@map("activities")
+}
+
+model OfficeSetting {
+  id           String   @id @default(cuid())
+  officeName   String   @default("مكتبي")
+  logo         String?
+  email        String?
+  phone        String?
+  address      String?
+  workingHours String?
+  updatedAt    DateTime @updatedAt
+
+  @@map("office_settings")
+}
+
+model RequiredDocument {
+  id           String   @id @default(cuid())
+  serviceId    String
+  title        String
+  displayOrder Int      @default(0)
+
+  service      Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@index([serviceId])
+  @@map("required_documents")
+}
+
+// =============================================================================
+// Case Management Module
+// =============================================================================
+
+model Client {
+  id          String    @id @default(cuid())
+  fullName    String
+  nationalId  String?   @unique
+  phone       String
+  email       String?
+  address     String?
+  nationality String?
+  birthDate   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  cases       Case[]
+
+  @@index([nationalId])
+  @@index([phone])
+  @@map("clients")
+}
+
+model Case {
+  id              String    @id @default(cuid())
+  caseNumber      String    @unique
+  clientId        String
+  serviceId       String
+  status          String    @default("NEW")
+  // NEW | WAITING_DOCS | IN_PROGRESS | COMPLETED | DELIVERED | CANCELLED
+  priority        String    @default("MEDIUM")
+  // LOW | MEDIUM | HIGH | URGENT
+  fees            Float     @default(0)
+  amountPaid      Float     @default(0)
+  remainingBalance Float    @default(0)
+  notes           String?
+  startDate       DateTime?
+  dueDate         DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  client          Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  service         Service        @relation(fields: [serviceId], references: [id])
+  documents       CaseDocument[]
+  timeline        CaseTimeline[]
+
+  @@index([clientId])
+  @@index([serviceId])
+  @@index([status])
+  @@index([caseNumber])
+  @@map("cases")
+}
+
+model CaseDocument {
+  id       String   @id @default(cuid())
+  caseId   String
+  title    String
+  received Boolean  @default(false)
+  notes    String?
+  order    Int      @default(0)
+
+  case     Case           @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  files    DocumentFile[]
+
+  @@index([caseId])
+  @@map("case_documents")
+}
+
+model DocumentFile {
+  id             String   @id @default(cuid())
+  caseDocumentId String
+  fileName       String
+  originalName   String
+  filePath       String
+  fileSize       Int
+  mimeType       String
+  uploadedAt     DateTime @default(now())
+  uploadedBy     String?
+
+  caseDocument   CaseDocument @relation(fields: [caseDocumentId], references: [id], onDelete: Cascade)
+
+  @@index([caseDocumentId])
+  @@map("document_files")
+}
+
+model CaseTimeline {
+  id        String   @id @default(cuid())
+  caseId    String
+  event     String
+  details   String?
+  createdAt DateTime @default(now())
+  createdBy String?
+
+  case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId])
+  @@map("case_timeline")
+}
