@@ -8,7 +8,7 @@ A comprehensive, production-ready web application for managing office services, 
 - **Language**: TypeScript
 - **Styling**: [Tailwind CSS](https://tailwindcss.com/)
 - **UI Components**: [shadcn/ui](https://ui.shadcn.com/)
-- **Database**: SQLite (via [Prisma ORM](https://www.prisma.io/))
+- **Database**: PostgreSQL on Supabase (via [Prisma ORM](https://www.prisma.io/))
 - **Authentication**: [NextAuth.js v5](https://authjs.dev/) (Credentials Provider)
 - **Validation**: [Zod](https://zod.dev/) & React Hook Form
 - **Icons**: Lucide React
@@ -46,7 +46,7 @@ npm install
 Create a `.env` file in the root directory:
 ```env
 # Database
-DATABASE_URL="file:./dev.db"
+DATABASE_URL="postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres?sslmode=require"
 
 # Next Auth (Generate a secret using: npx auth secret)
 AUTH_SECRET="your-super-secret-key"

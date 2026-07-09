@@ -1,4 +1,4 @@
-import { PrismaClient } from '../src/generated/prisma/client'
+import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 import * as dotenv from 'dotenv'
 
@@ -11,7 +11,7 @@ async function main() {
 
   const user = await prisma.user.upsert({
     where: { email: 'admin@example.com' },
-    update: {},
+    update: { password: userPassword },
     create: {
       email: 'admin@example.com',
       name: 'مدير النظام',
